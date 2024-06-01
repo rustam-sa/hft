@@ -3,6 +3,16 @@ from functools import wraps
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+def session_management(method):
+    @wraps(method)
+    def wrapper(*args, **kwargs):
+        self = args[0]
+        session = self.db_manager.get_session()
+        try:
+            return method(self, session, *args, **kwargs)
+        finally:
+            session.close()
+    return wrapper
 
 
 class DatabaseManager:
@@ -15,20 +25,12 @@ class DatabaseManager:
         engine = create_engine(database_url)
         return engine
 
-    @staticmethod
     def get_session(self):
         engine = self.get_database_engine()
         Session = sessionmaker(engine)
         session = Session()
         return session
     
-    @staticmethod
-    def session_management(method):
-        @wraps(method)
-        def wrapper(self, *args, **kwargs):
-            session = self.get_session()
-            try:
-                return method(self, session, *args, **kwargs)
-            finally:
-                session.close()
-        return wrapper
+
+    
+
