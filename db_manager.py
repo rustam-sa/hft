@@ -5,8 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 def session_management(method):
     @wraps(method)
-    def wrapper(*args, **kwargs):
-        self = args[0]
+    def wrapper(self, *args, **kwargs):
         session = self.db_manager.get_session()
         try:
             return method(self, session, *args, **kwargs)
