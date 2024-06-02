@@ -1,3 +1,4 @@
+import pandas as pd
 from models import Base, MarketData
 from db_manager import DatabaseManager, session_management
 from data_getter import DataGetter
@@ -31,3 +32,10 @@ class DataService:
 
         # Commit the session
         session.commit()
+
+    def load_market_data(self):
+        """Load MarketData table into a pandas DataFrame."""
+        engine = self.db_manager.get_database_engine()
+        with engine.connect() as connection:
+            df = pd.read_sql_table('market_data', con=connection)
+        return df
