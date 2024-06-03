@@ -34,8 +34,9 @@ class DataService:
         session.commit()
 
     def load_market_data(self):
-        """Load MarketData table into a pandas DataFrame."""
+        """Load MarketData table into a pandas DataFrame filtered by symbol."""
         engine = self.db_manager.get_database_engine()
         with engine.connect() as connection:
-            df = pd.read_sql_table('market_data', con=connection)
+            query = f"SELECT * FROM market_data WHERE symbol = '{self.symbol}'"
+            df = pd.read_sql_query(query, con=connection)
         return df
