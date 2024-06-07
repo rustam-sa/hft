@@ -17,6 +17,7 @@ psycopg2-binary = "*"
 alembic = "*"
 xgboost = "*"
 optuna = "*"
+pyautogui = "*"
 
 [dev-packages]
 

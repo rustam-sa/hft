@@ -1,4 +1,6 @@
 import pandas as pd
+from sqlalchemy import text, inspect
+from sqlalchemy.exc import SQLAlchemyError
 from models import Base, MarketData
 from db_manager import DatabaseManager, session_management
 from data_getter import DataGetter
@@ -40,3 +42,57 @@ class DataService:
             query = f"SELECT * FROM market_data WHERE symbol = '{self.symbol}'"
             df = pd.read_sql_query(query, con=connection)
         return df
+    
+    def ensure_schema_exists(self, schema):
+        engine = self.db_manager.get_database_engine()
+        with engine.connect() as conn:
+            conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema};"))
+
+    def save_dataframes_to_db(self, dataframes, schema, table_prefix='table_'):
+        self.ensure_schema_exists(schema)
+        engine = self.db_manager.get_database_engine()
+        for i, df in enumerate(dataframes):
+            table_name = f'{table_prefix}{i+1}'  # Create a unique table name
+            try:
+                df.to_sql(table_name, engine, index=False, if_exists='replace', schema=schema)  # Save the DataFrame to the database with schema
+                print(f'Table {table_name} saved successfully in schema {schema}.')
+            except SQLAlchemyError as e:
+                print(f'Error saving table {table_name} in schema {schema}: {e}')
+
+    def load_table_to_dataframe(self, table_name, schema=None):
+        engine = self.db_manager.get_database_engine()
+        df = pd.read_sql_table(table_name, engine, schema=schema)
+        return df
+    
+    def load_all_tables_to_dataframes(self, table_names, schema=None):
+        engine = self.db_manager.get_database_engine()
+        dataframes = []
+        for table_name in table_names:
+            try:
+                df = pd.read_sql_table(table_name, engine, schema=schema)
+                dataframes.append(df)
+                print(f'Table {table_name} loaded successfully from schema {schema}.')
+            except SQLAlchemyError as e:
+                print(f'Error loading table {table_name} from schema {schema}: {e}')
+        return dataframes
+    
+    def load_all_tables_in_schema(self, schema):
+        engine = self.db_manager.get_database_engine()
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names(schema=schema)
+        dataframes = []
+        for table_name in table_names:
+            try:
+                df = pd.read_sql_table(table_name, engine, schema=schema)
+                dataframes.append(df)
+                print(f'Table {table_name} loaded successfully from schema {schema}.')
+            except SQLAlchemyError as e:
+                print(f'Error loading table {table_name} from schema {schema}: {e}')
+        return dataframes
+    
+    @session_management
+    def delete_schema(self, session, schema_name):
+        session.execute(f"DROP SCHEMA IF EXISTS {schema_name} CASCADE")
+        session.commit()
+        print(f"Schema '{schema_name}' deleted successfully.")
+

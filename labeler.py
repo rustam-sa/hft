@@ -5,8 +5,9 @@ import os
 
 
 class BinaryWinFinder:
-    def __init__(self, df, long_or_short, candle_span, distance_threshold):
+    def __init__(self, df, symbol, long_or_short, candle_span, distance_threshold):
         self.df = df
+        self.symbol =  f"({symbol.split("-")[0]})"
         self.long_or_short = long_or_short
         self.candle_span = candle_span
         self.distance_threshold = distance_threshold
@@ -19,8 +20,8 @@ class BinaryWinFinder:
         upper_stop = self.df.at[index, "upper_stop"]
         lower_stop = self.df.at[index, "lower_stop"]
         frame_segment = self.df.iloc[index+1:index+self.candle_span, :]
-        upper_triggers = frame_segment.index[frame_segment['high'] >= upper_stop].tolist()
-        lower_triggers = frame_segment.index[frame_segment['low'] <= lower_stop].tolist()
+        upper_triggers = frame_segment.index[frame_segment[f'high {self.symbol}'] >= upper_stop].tolist()
+        lower_triggers = frame_segment.index[frame_segment[f'low {self.symbol}'] <= lower_stop].tolist()
         
         if not (lower_triggers + upper_triggers):
             return np.Inf
@@ -53,12 +54,13 @@ class BinaryWinFinder:
     def find_wins(self):
         try:
             self.df = self.df.reset_index(drop=True)
-            self.df['upper_stop'] = self.df['close'] * (1 + self.distance_threshold)
-            self.df['lower_stop'] = self.df['close'] * (1 - self.distance_threshold)
+            self.df['upper_stop'] = self.df[f'close {self.symbol}'] * (1 + self.distance_threshold)
+            self.df['lower_stop'] = self.df[f'close {self.symbol}'] * (1 - self.distance_threshold)
             self.df['took_profit_index'] = self.df.index.map(self._return_index_of_take_profit)
             self.df['win'] = np.where(self.df['took_profit_index'] != np.Inf, 1, 0)
             self.df = self.df.drop(['upper_stop', 'lower_stop', 'took_profit_index'], axis=1)
             self.df = self.df.reset_index(drop=True)
+            self.df.to_csv('find_wins_test.csv')
 
         except Exception as e:
             # Log the error with the relevant data

@@ -1,0 +1,18 @@
+import pyautogui
+import time
+from PIL import Image
+
+# Capture screenshot
+time.sleep(5)
+screenshot = pyautogui.screenshot()
+
+# Save the screenshot as an image file
+image_path = "screenshot.png"
+screenshot.save(image_path)
+
+# Convert the image to PDF
+image = Image.open(image_path)
+pdf_path = "screenshot.pdf"
+image.convert('RGB').save(pdf_path)
+
+print(f"Screenshot saved as PDF at {pdf_path}")
