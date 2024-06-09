@@ -103,7 +103,7 @@ def scale_and_annotate_samples(samples_with_metadata, symbol_a="ETH-USDT", symbo
     
     return scaled_samples_with_metadata
 
-def process_and_save_market_data(symbols, timeframe, main_symbol, trade_type, profit_target, collection_name):
+def process_and_save_market_data(trade_type, profit_target, candle_span, collection_name, symbols=["ETH-USDT", "BTC-USDT"], timeframe="3min", main_symbol="ETH-USDT", head=None):
     """
     Processes market data for the given symbols and saves the processed samples to a specified collection.
 
@@ -115,33 +115,36 @@ def process_and_save_market_data(symbols, timeframe, main_symbol, trade_type, pr
     profit_target (int): The profit target for labeling wins.
     collection_name (str): The name of the collection to save the processed samples to.
     """
-    try:
-        logging.info("Starting market data processing...")
+    logging.info("Starting market data processing...")
 
-        # Step 1: Get market data
+    # Step 1: Get market data
+    if head:
+        df = get_market_data_for_symbols(symbols, timeframe).head(head)
+    else:
         df = get_market_data_for_symbols(symbols, timeframe)
-        logging.info("Market data retrieved successfully.")
+    logging.info("Market data retrieved successfully.")
+    
+    # Step 2: Drop unwanted columns
+    df = drop_unwanted_columns(df)
+    print(df)
+    logging.info("Unwanted columns dropped.")
 
-        # Step 2: Drop unwanted columns
-        df = drop_unwanted_columns(df)
-        logging.info("Unwanted columns dropped.")
+    # Step 3: Label wins
+    df["win"] = label_wins(df, main_symbol, trade_type, candle_span, profit_target)
+    logging.info("Wins labeled.")
 
-        # Step 3: Label wins
-        df["win"] = label_wins(df, main_symbol, trade_type, profit_target)
-        logging.info("Wins labeled.")
+    # Step 4: Extract previous candles with outcome
+    samples_with_metadata = extract_previous_candles_with_outcome(df)
+    logging.info("Previous candles with outcomes extracted.")
 
-        # Step 4: Extract previous candles with outcome
-        samples_with_metadata = extract_previous_candles_with_outcome(df)
-        logging.info("Previous candles with outcomes extracted.")
+    # Step 5: Scale and annotate samples
+    scaled_samples_with_metadata = scale_and_annotate_samples(samples_with_metadata)
+    logging.info("Samples scaled and annotated.")
+    
+    # Step 6: Save samples to collection
+    data_service = DataService(main_symbol, timeframe)
+    data_service.save_samples_to_collection(samples_with_metadata=scaled_samples_with_metadata, collection_name=collection_name)
+    logging.info("Samples saved to collection successfully.")
 
-        # Step 5: Scale and annotate samples
-        scaled_samples_with_metadata = scale_and_annotate_samples(samples_with_metadata)
-        logging.info("Samples scaled and annotated.")
 
-        # Step 6: Save samples to collection
-        data_service = DataService(main_symbol, timeframe)
-        data_service.save_samples_to_collection(samples_with_metadata=scaled_samples_with_metadata, collection_name=collection_name)
-        logging.info("Samples saved to collection successfully.")
-
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
+# Ensure to define your DataService, BinaryWinFinder, and other required classes and methods.

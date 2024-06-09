@@ -1,3 +1,4 @@
+import gc
 from data_service import DataService
 from labeler import BinaryWinFinder 
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -111,48 +112,66 @@ def scale_and_annotate_samples(samples_with_metadata, symbol_a="ETH-USDT", symbo
     
     return scaled_samples_with_metadata
 
-def process_and_save_market_data(trade_type, profit_target, candle_span, collection_name, symbols=["ETH-USDT", "BTC-USDT"], timeframe="3min", main_symbol="ETH-USDT", head=None):
+def get_market_data_for_symbols_in_batches(list_of_symbols, timeframe, head, batch_size=10000):
     """
-    Processes market data for the given symbols and saves the processed samples to a specified collection.
+    Queries all market data available in the database for the selected symbols and timeframe in batches.
 
-    Parameters:
-    symbols (list): List of market symbols to get data for.
-    timeframe (str): Timeframe for the market data.
-    main_symbol (str): The main symbol for which to label wins.
-    trade_type (str): The type of trade ("long" or "short").
-    profit_target (int): The profit target for labeling wins.
-    collection_name (str): The name of the collection to save the processed samples to.
+    Each series name includes the symbol.
+
+    Params:
+        list_of_symbols: format like 'ETH-USDT'
+        timeframe: format like '1min'
+        batch_size: number of rows per batch
+
+    Yields:
+        batched dataframe
     """
-    logging.info("Starting market data processing...")
+    dataframes = []
+    for symbol in list_of_symbols:
+        df = DataService(symbol, timeframe).load_market_data().head(head)
+        df.columns = [col + f" ({symbol.split('-')[0]})" if col != "timestamp" else col for col in df.columns]
+        dataframes.append(df)
 
-    # Step 1: Get market data
-    if head:
-        df = get_market_data_for_symbols(symbols, timeframe).head(head)
-    else:
-        df = get_market_data_for_symbols(symbols, timeframe)
-    logging.info("Market data retrieved successfully.")
+    merged_df = dataframes[0]
+    for i in range(1, len(dataframes)):
+        merged_df = pd.merge(merged_df, dataframes[i], on='timestamp', how='inner')
 
-    # Step 2: Drop unwanted columns
-    df = drop_unwanted_columns(df)
-    print(df)
-    logging.info("Unwanted columns dropped.")
+    for start in range(0, len(merged_df), batch_size):
+        yield merged_df.iloc[start:start + batch_size]
 
-    # Step 3: Label wins
-    df["win"] = label_wins(df, main_symbol, trade_type, candle_span, profit_target)
-    logging.info("Wins labeled.")
+def process_and_save_market_data_in_batches(trade_type, profit_target, candle_span, collection_name, head, symbols=["ETH-USDT", "BTC-USDT"], timeframe="3min", main_symbol="ETH-USDT", batch_size=10000):
+    logging.info("Starting market data processing in batches...")
 
-    # Step 4: Extract previous candles with outcome
-    samples_with_metadata = extract_previous_candles_with_outcome(df)
-    logging.info("Previous candles with outcomes extracted.")
+    # Step 1: Get market data in batches
+    batch_number = 1
+    for df in get_market_data_for_symbols_in_batches(symbols, timeframe, head, batch_size):
+        logging.info(f"Processing batch {batch_number}...")
+        
+        # Step 2: Drop unwanted columns
+        df = drop_unwanted_columns(df)
+        logging.info("Unwanted columns dropped.")
 
-    # Step 5: Scale and annotate samples
-    scaled_samples_with_metadata = scale_and_annotate_samples(samples_with_metadata)
-    logging.info("Samples scaled and annotated.")
+        # Step 3: Label wins
+        df["win"] = label_wins(df, main_symbol, trade_type, candle_span, profit_target)
+        logging.info("Wins labeled.")
 
-    # Step 6: Save samples to collection
-    data_service = DataService(main_symbol, timeframe)
-    data_service.save_samples_to_collection(samples_with_metadata=scaled_samples_with_metadata, collection_name=collection_name)
-    logging.info("Samples saved to collection successfully.")
+        # Step 4: Extract previous candles with outcome
+        samples_with_metadata = extract_previous_candles_with_outcome(df)
+        logging.info("Previous candles with outcomes extracted.")
 
+        # Step 5: Scale and annotate samples
+        scaled_samples_with_metadata = scale_and_annotate_samples(samples_with_metadata)
+        logging.info("Samples scaled and annotated.")
+        
+        # Step 6: Save samples to collection
+        data_service = DataService(main_symbol, timeframe)
+        data_service.save_samples_to_collection(samples_with_metadata=scaled_samples_with_metadata, collection_name=collection_name)
+        logging.info("Samples saved to collection successfully.")
 
-# Ensure to define your DataService, BinaryWinFinder, and other required classes and methods.
+        # Clean up memory
+        del df, samples_with_metadata, scaled_samples_with_metadata
+        gc.collect()
+
+        batch_number += 1
+
+    logging.info("All batches processed successfully.")

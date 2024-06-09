@@ -1,3 +1,4 @@
+import logging
 import pandas as pd
 from datetime import datetime
 from sqlalchemy import text, inspect, func
@@ -6,6 +7,8 @@ from models import Base, MarketData, Collection, DataFrameMetadata, DataFrameEnt
 from db_manager import DatabaseManager, session_management
 from data_getter import DataGetter
 
+
+logging.basicConfig(level=logging.INFO)
 
 class DataService:
     def __init__(self, symbol="ETH-USDT", timeframe="3min"):
@@ -107,78 +110,106 @@ class DataService:
             collection_name (str): The name of the collection.
         """
 
-        # Create a new collection
-        new_collection = Collection(collection_name=collection_name)
-        session.add(new_collection)
-        session.commit()
-        
-        # Add each sample to the collection
-        for sample in samples_with_metadata:
-            timestamp = sample['timestamp']
-            label = sample['label']
-            dataframe = sample['dataframe']
-            
-            # Create a new DataFrameMetadata
-            new_metadata = DataFrameMetadata(timestamp=timestamp, label=label, collection=new_collection)
-            session.add(new_metadata)
+        try:
+            # Create a new collection
+            new_collection = Collection(collection_name=collection_name)
+            session.add(new_collection)
             session.commit()
 
-            # Add each row of the dataframe as a DataFrameEntry
-            for index, row in dataframe.iterrows():
-                new_entry = DataFrameEntry(
-                    data_frame_metadata=new_metadata,
-                    open_btc=row.get('open_btc'),
-                    close_btc=row.get('close_btc'),
-                    high_btc=row.get('high_btc'),
-                    low_btc=row.get('low_btc'),
-                    volume_btc=row.get('volume_btc'),
-                    amount_btc=row.get('amount_btc'),
-                    open_eth=row.get('open_eth'),
-                    close_eth=row.get('close_eth'),
-                    high_eth=row.get('high_eth'),
-                    low_eth=row.get('low_eth'),
-                    volume_eth=row.get('volume_eth'),
-                    amount_eth=row.get('amount_eth'),
-                    open_btc_robust=row.get('open_btc_robust'),
-                    close_btc_robust=row.get('close_btc_robust'),
-                    high_btc_robust=row.get('high_btc_robust'),
-                    low_btc_robust=row.get('low_btc_robust'),
-                    volume_btc_robust=row.get('volume_btc_robust'),
-                    amount_btc_robust=row.get('amount_btc_robust'),
-                    open_eth_robust=row.get('open_eth_robust'),
-                    close_eth_robust=row.get('close_eth_robust'),
-                    high_eth_robust=row.get('high_eth_robust'),
-                    low_eth_robust=row.get('low_eth_robust'),
-                    volume_eth_robust=row.get('volume_eth_robust'),
-                    amount_eth_robust=row.get('amount_eth_robust'),
-                    open_btc_standard=row.get('open_btc_standard'),
-                    close_btc_standard=row.get('close_btc_standard'),
-                    high_btc_standard=row.get('high_btc_standard'),
-                    low_btc_standard=row.get('low_btc_standard'),
-                    volume_btc_standard=row.get('volume_btc_standard'),
-                    amount_btc_standard=row.get('amount_btc_standard'),
-                    open_eth_standard=row.get('open_eth_standard'),
-                    close_eth_standard=row.get('close_eth_standard'),
-                    high_eth_standard=row.get('high_eth_standard'),
-                    low_eth_standard=row.get('low_eth_standard'),
-                    volume_eth_standard=row.get('volume_eth_standard'),
-                    amount_eth_standard=row.get('amount_eth_standard'),
-                    open_btc_minmax=row.get('open_btc_minmax'),
-                    close_btc_minmax=row.get('close_btc_minmax'),
-                    high_btc_minmax=row.get('high_btc_minmax'),
-                    low_btc_minmax=row.get('low_btc_minmax'),
-                    volume_btc_minmax=row.get('volume_btc_minmax'),
-                    amount_btc_minmax=row.get('amount_btc_minmax'),
-                    open_eth_minmax=row.get('open_eth_minmax'),
-                    close_eth_minmax=row.get('close_eth_minmax'),
-                    high_eth_minmax=row.get('high_eth_minmax'),
-                    low_eth_minmax=row.get('low_eth_minmax'),
-                    volume_eth_minmax=row.get('volume_eth_minmax'),
-                    amount_eth_minmax=row.get('amount_eth_minmax')
-                )
-                session.add(new_entry)
-            session.commit()
-        print(f"Collection '{collection_name}' saved successfully with {len(samples_with_metadata)} samples.")
+            for sample in samples_with_metadata:
+                timestamp = sample['timestamp']
+                label = sample['label']
+                dataframe = sample['dataframe']
+
+                # Rename columns to match the DataFrameEntry schema
+                dataframe = dataframe.rename(columns={
+                    'open (ETH)': 'open_eth',
+                    'close (ETH)': 'close_eth',
+                    'high (ETH)': 'high_eth',
+                    'low (ETH)': 'low_eth',
+                    'volume (ETH)': 'volume_eth',
+                    'open (BTC)': 'open_btc',
+                    'close (BTC)': 'close_btc',
+                    'high (BTC)': 'high_btc',
+                    'low (BTC)': 'low_btc',
+                    'volume (BTC)': 'volume_btc',
+                    # Add similar mappings for robust, standard, and minmax columns if they exist in your data
+                })
+
+                # Create a new DataFrameMetadata
+                new_metadata = DataFrameMetadata(timestamp=timestamp, label=label, collection=new_collection)
+                session.add(new_metadata)
+                session.commit()
+
+                # Add each row of the dataframe as a DataFrameEntry
+                entries = []
+                for index, row in dataframe.iterrows():
+                    new_entry = DataFrameEntry(
+                        data_frame_metadata=new_metadata,
+                        open_btc=row.get('open_btc'),
+                        close_btc=row.get('close_btc'),
+                        high_btc=row.get('high_btc'),
+                        low_btc=row.get('low_btc'),
+                        volume_btc=row.get('volume_btc'),
+                        amount_btc=row.get('amount_btc'),
+                        open_eth=row.get('open_eth'),
+                        close_eth=row.get('close_eth'),
+                        high_eth=row.get('high_eth'),
+                        low_eth=row.get('low_eth'),
+                        volume_eth=row.get('volume_eth'),
+                        amount_eth=row.get('amount_eth'),
+                        open_btc_robust=row.get('open_btc_robust'),
+                        close_btc_robust=row.get('close_btc_robust'),
+                        high_btc_robust=row.get('high_btc_robust'),
+                        low_btc_robust=row.get('low_btc_robust'),
+                        volume_btc_robust=row.get('volume_btc_robust'),
+                        amount_btc_robust=row.get('amount_btc_robust'),
+                        open_eth_robust=row.get('open_eth_robust'),
+                        close_eth_robust=row.get('close_eth_robust'),
+                        high_eth_robust=row.get('high_eth_robust'),
+                        low_eth_robust=row.get('low_eth_robust'),
+                        volume_eth_robust=row.get('volume_eth_robust'),
+                        amount_eth_robust=row.get('amount_eth_robust'),
+                        open_btc_standard=row.get('open_btc_standard'),
+                        close_btc_standard=row.get('close_btc_standard'),
+                        high_btc_standard=row.get('high_btc_standard'),
+                        low_btc_standard=row.get('low_btc_standard'),
+                        volume_btc_standard=row.get('volume_btc_standard'),
+                        amount_btc_standard=row.get('amount_btc_standard'),
+                        open_eth_standard=row.get('open_eth_standard'),
+                        close_eth_standard=row.get('close_eth_standard'),
+                        high_eth_standard=row.get('high_eth_standard'),
+                        low_eth_standard=row.get('low_eth_standard'),
+                        volume_eth_standard=row.get('volume_eth_standard'),
+                        amount_eth_standard=row.get('amount_eth_standard'),
+                        open_btc_minmax=row.get('open_btc_minmax'),
+                        close_btc_minmax=row.get('close_btc_minmax'),
+                        high_btc_minmax=row.get('high_btc_minmax'),
+                        low_btc_minmax=row.get('low_btc_minmax'),
+                        volume_btc_minmax=row.get('volume_btc_minmax'),
+                        amount_btc_minmax=row.get('amount_btc_minmax'),
+                        open_eth_minmax=row.get('open_eth_minmax'),
+                        close_eth_minmax=row.get('close_eth_minmax'),
+                        high_eth_minmax=row.get('high_eth_minmax'),
+                        low_eth_minmax=row.get('low_eth_minmax'),
+                        volume_eth_minmax=row.get('volume_eth_minmax'),
+                        amount_eth_minmax=row.get('amount_eth_minmax')
+                    )
+                    entries.append(new_entry)
+
+                session.bulk_save_objects(entries)
+                session.commit()
+                logging.info(f"Metadata with timestamp {timestamp} and label {label} added to collection '{collection_name}'")
+            logging.info(f"Collection '{collection_name}' saved successfully with {len(samples_with_metadata)} samples.")
+
+        except SQLAlchemyError as e:
+            logging.error(f"Error saving samples to collection: {e}")
+            session.rollback()
+            raise
+
+        finally:
+            session.close()
+
 
     def replace_with_scaled_columns(self, list_of_dataframes, scaled_dfs, prefix):
         if len(list_of_dataframes) != len(scaled_dfs):
@@ -269,6 +300,50 @@ class DataService:
             print(f"An error occurred: {e}")
 
     @session_management
+    def merge_duplicate_market_data(self, session):
+        try:
+            # Step 1: Find duplicate MarketData entries based on unique fields (example: symbol, timeframe, and timestamp)
+            duplicates_query = (
+                session.query(
+                    MarketData.symbol,
+                    MarketData.timeframe,
+                    MarketData.timestamp,
+                    func.count(MarketData.id).label('count')
+                )
+                .group_by(MarketData.symbol, MarketData.timeframe, MarketData.timestamp)
+                .having(func.count(MarketData.id) > 1)
+            )
+
+            duplicates = duplicates_query.all()
+            print(f"Found {len(duplicates)} duplicate MarketData entries.")
+
+            # Step 2: Process each set of duplicates
+            for duplicate in duplicates:
+                symbol, timeframe, timestamp, count = duplicate
+
+                # Fetch all entries that are duplicates
+                duplicate_entries = (
+                    session.query(MarketData)
+                    .filter_by(symbol=symbol, timeframe=timeframe, timestamp=timestamp)
+                    .all()
+                )
+
+                if len(duplicate_entries) > 1:
+                    primary_entry = duplicate_entries[0]
+                    duplicate_entries_to_delete = duplicate_entries[1:]
+
+                    # Example strategy: merge data from duplicates (here, just deleting duplicates)
+                    for entry in duplicate_entries_to_delete:
+                        session.delete(entry)
+
+            session.commit()  # Commit the transaction
+            print("Duplicate MarketData entries merged and duplicates removed.")
+
+        except SQLAlchemyError as e:
+            session.rollback()  # Rollback the transaction in case of error
+            print(f"An error occurred: {e}")
+
+    @session_management
     def get_dataframes_as_dicts(self, session, scaler_type=None, collection_name=None):
         """
         Retrieve dataframes for a specific collection and convert them into dictionaries containing 'label', 'timestamp', and 'data'.
@@ -286,7 +361,7 @@ class DataService:
             collections = session.query(Collection).all()
 
         result = []
-
+        print(collections)
         for collection in collections:
             for metadata in collection.data_frames_metadata:
                 entries = metadata.data_frame_entries
