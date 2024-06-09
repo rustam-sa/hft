@@ -320,3 +320,18 @@ class DataService:
                 })
 
         return result
+    
+    def get_all_collection_names(self):
+        """
+        Retrieve all collection names from the database.
+
+        Returns:
+            list: A list of all collection names.
+        """
+        engine = self.db_manager.get_database_engine()
+        collection_names = []
+        with engine.connect() as connection:
+            query = text("SELECT collection_name FROM collections")
+            result = connection.execute(query)
+            collection_names = [row['collection_name'] for row in result]
+        return collection_names
