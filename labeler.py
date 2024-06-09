@@ -52,25 +52,14 @@ class BinaryWinFinder:
                     return np.Inf
                 
     def find_wins(self):
-        try:
-            self.df = self.df.reset_index(drop=True)
-            self.df['upper_stop'] = self.df[f'close {self.symbol}'] * (1 + self.distance_threshold)
-            self.df['lower_stop'] = self.df[f'close {self.symbol}'] * (1 - self.distance_threshold)
-            self.df['took_profit_index'] = self.df.index.map(self._return_index_of_take_profit)
-            self.df['win'] = np.where(self.df['took_profit_index'] != np.Inf, 1, 0)
-            self.df = self.df.drop(['upper_stop', 'lower_stop', 'took_profit_index'], axis=1)
-            self.df = self.df.reset_index(drop=True)
-            self.df.to_csv('find_wins_test.csv')
-
-        except Exception as e:
-            # Log the error with the relevant data
-            logging.error("Error during timestamp conversion and formatting: %s", e)
-            
-            # Log the DataFrame that caused the error
-            timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
-            error_log_filename = f'error_data_{timestamp}.csv'
-            log_dir = os.makedirs("logs", exist_ok=True)
-            self.df.to_csv(log_dir + "/" + error_log_filename, index=False)
-            logging.error("Data causing error saved to %s", error_log_filename)
+        
+        self.df = self.df.reset_index(drop=True)
+        self.df['upper_stop'] = self.df[f'close {self.symbol}'] * (1 + self.distance_threshold)
+        self.df['lower_stop'] = self.df[f'close {self.symbol}'] * (1 - self.distance_threshold)
+        self.df['took_profit_index'] = self.df.index.map(self._return_index_of_take_profit)
+        self.df['win'] = np.where(self.df['took_profit_index'] != np.Inf, 1, 0)
+        self.df = self.df.drop(['upper_stop', 'lower_stop', 'took_profit_index'], axis=1)
+        self.df = self.df.reset_index(drop=True)
+        self.df.to_csv('find_wins_test.csv')
             
         return self.df['win']

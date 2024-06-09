@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import datetime
-from sqlalchemy import text, inspect
+from sqlalchemy import text, inspect, func
 from sqlalchemy.exc import SQLAlchemyError
 from models import Base, MarketData, Collection, DataFrameMetadata, DataFrameEntry
 from db_manager import DatabaseManager, session_management
@@ -8,7 +8,7 @@ from data_getter import DataGetter
 
 
 class DataService:
-    def __init__(self, symbol, timeframe):
+    def __init__(self, symbol="ETH-USDT", timeframe="3min"):
         self.symbol = symbol
         self.timeframe = timeframe
         self.db_manager = DatabaseManager()
@@ -127,136 +127,168 @@ class DataService:
             for index, row in dataframe.iterrows():
                 new_entry = DataFrameEntry(
                     data_frame_metadata=new_metadata,
-                    open_btc=row.get('open (BTC)'),
-                    close_btc=row.get('close (BTC)'),
-                    high_btc=row.get('high (BTC)'),
-                    low_btc=row.get('low (BTC)'),
-                    volume_btc=row.get('volume (BTC)'),
-                    amount_btc=row.get('amount (BTC)'),
-                    open_eth=row.get('open (ETH)'),
-                    close_eth=row.get('close (ETH)'),
-                    high_eth=row.get('high (ETH)'),
-                    low_eth=row.get('low (ETH)'),
-                    volume_eth=row.get('volume (ETH)'),
-                    amount_eth=row.get('amount (ETH)'),
-                    open_btc_robust=row.get('open (BTC) robust'),
-                    close_btc_robust=row.get('close (BTC) robust'),
-                    high_btc_robust=row.get('high (BTC) robust'),
-                    low_btc_robust=row.get('low (BTC) robust'),
-                    volume_btc_robust=row.get('volume (BTC) robust'),
-                    amount_btc_robust=row.get('amount (BTC) robust'),
-                    open_eth_robust=row.get('open (ETH) robust'),
-                    close_eth_robust=row.get('close (ETH) robust'),
-                    high_eth_robust=row.get('high (ETH) robust'),
-                    low_eth_robust=row.get('low (ETH) robust'),
-                    volume_eth_robust=row.get('volume (ETH) robust'),
-                    amount_eth_robust=row.get('amount (ETH) robust'),
-                    open_btc_standard=row.get('open (BTC) standard'),
-                    close_btc_standard=row.get('close (BTC) standard'),
-                    high_btc_standard=row.get('high (BTC) standard'),
-                    low_btc_standard=row.get('low (BTC) standard'),
-                    volume_btc_standard=row.get('volume (BTC) standard'),
-                    amount_btc_standard=row.get('amount (BTC) standard'),
-                    open_eth_standard=row.get('open (ETH) standard'),
-                    close_eth_standard=row.get('close (ETH) standard'),
-                    high_eth_standard=row.get('high (ETH) standard'),
-                    low_eth_standard=row.get('low (ETH) standard'),
-                    volume_eth_standard=row.get('volume (ETH) standard'),
-                    amount_eth_standard=row.get('amount (ETH) standard'),
-                    open_btc_minmax=row.get('open (BTC) minmax'),
-                    close_btc_minmax=row.get('close (BTC) minmax'),
-                    high_btc_minmax=row.get('high (BTC) minmax'),
-                    low_btc_minmax=row.get('low (BTC) minmax'),
-                    volume_btc_minmax=row.get('volume (BTC) minmax'),
-                    amount_btc_minmax=row.get('amount (BTC) minmax'),
-                    open_eth_minmax=row.get('open (ETH) minmax'),
-                    close_eth_minmax=row.get('close (ETH) minmax'),
-                    high_eth_minmax=row.get('high (ETH) minmax'),
-                    low_eth_minmax=row.get('low (ETH) minmax'),
-                    volume_eth_minmax=row.get('volume (ETH) minmax'),
-                    amount_eth_minmax=row.get('amount (ETH) minmax')
+                    open_btc=row.get('open_btc'),
+                    close_btc=row.get('close_btc'),
+                    high_btc=row.get('high_btc'),
+                    low_btc=row.get('low_btc'),
+                    volume_btc=row.get('volume_btc'),
+                    amount_btc=row.get('amount_btc'),
+                    open_eth=row.get('open_eth'),
+                    close_eth=row.get('close_eth'),
+                    high_eth=row.get('high_eth'),
+                    low_eth=row.get('low_eth'),
+                    volume_eth=row.get('volume_eth'),
+                    amount_eth=row.get('amount_eth'),
+                    open_btc_robust=row.get('open_btc_robust'),
+                    close_btc_robust=row.get('close_btc_robust'),
+                    high_btc_robust=row.get('high_btc_robust'),
+                    low_btc_robust=row.get('low_btc_robust'),
+                    volume_btc_robust=row.get('volume_btc_robust'),
+                    amount_btc_robust=row.get('amount_btc_robust'),
+                    open_eth_robust=row.get('open_eth_robust'),
+                    close_eth_robust=row.get('close_eth_robust'),
+                    high_eth_robust=row.get('high_eth_robust'),
+                    low_eth_robust=row.get('low_eth_robust'),
+                    volume_eth_robust=row.get('volume_eth_robust'),
+                    amount_eth_robust=row.get('amount_eth_robust'),
+                    open_btc_standard=row.get('open_btc_standard'),
+                    close_btc_standard=row.get('close_btc_standard'),
+                    high_btc_standard=row.get('high_btc_standard'),
+                    low_btc_standard=row.get('low_btc_standard'),
+                    volume_btc_standard=row.get('volume_btc_standard'),
+                    amount_btc_standard=row.get('amount_btc_standard'),
+                    open_eth_standard=row.get('open_eth_standard'),
+                    close_eth_standard=row.get('close_eth_standard'),
+                    high_eth_standard=row.get('high_eth_standard'),
+                    low_eth_standard=row.get('low_eth_standard'),
+                    volume_eth_standard=row.get('volume_eth_standard'),
+                    amount_eth_standard=row.get('amount_eth_standard'),
+                    open_btc_minmax=row.get('open_btc_minmax'),
+                    close_btc_minmax=row.get('close_btc_minmax'),
+                    high_btc_minmax=row.get('high_btc_minmax'),
+                    low_btc_minmax=row.get('low_btc_minmax'),
+                    volume_btc_minmax=row.get('volume_btc_minmax'),
+                    amount_btc_minmax=row.get('amount_btc_minmax'),
+                    open_eth_minmax=row.get('open_eth_minmax'),
+                    close_eth_minmax=row.get('close_eth_minmax'),
+                    high_eth_minmax=row.get('high_eth_minmax'),
+                    low_eth_minmax=row.get('low_eth_minmax'),
+                    volume_eth_minmax=row.get('volume_eth_minmax'),
+                    amount_eth_minmax=row.get('amount_eth_minmax')
                 )
                 session.add(new_entry)
             session.commit()
         print(f"Collection '{collection_name}' saved successfully with {len(samples_with_metadata)} samples.")
-            
-    def retrieve_samples_by_scaler(self, collection_name, scaler_name):
-        """
-        Retrieve samples from a collection by scaler and return them as a list of dictionaries 
-        containing the dataframe, timestamp, and label.
 
-        Args:
-            collection_name (str): The name of the collection.
-            scaler_name (str): The name of the scaler to filter columns by.
+    def replace_with_scaled_columns(self, list_of_dataframes, scaled_dfs, prefix):
+        if len(list_of_dataframes) != len(scaled_dfs):
+            raise ValueError("Both lists must have the same length")
 
-        Returns:
-            list of dict: List of dictionaries, each containing 'dataframe', 'timestamp', and 'label'.
-        """
-        engine = self.db_manager.get_database_engine()
-        samples_with_metadata = []
+        for df, scaled_df in zip(list_of_dataframes, scaled_dfs):
+            for column in scaled_df.columns:
+                new_column = f'{prefix}_{column}'
+                df[new_column] = scaled_df[column]
 
-        with engine.connect() as connection:
-            query = text(f"""
-                SELECT m.timestamp, m.label, e.* 
-                FROM data_frame_metadata m
-                JOIN data_frame_entries e ON m.id = e.data_frame_metadata_id
-                JOIN collections c ON m.collection_id = c.id
-                WHERE c.collection_name = :collection_name
-            """)
-            result = connection.execute(query, {'collection_name': collection_name})
-
-            for row in result:
-                # Filter columns based on scaler_name
-                columns_to_include = [col for col in row.keys() if scaler_name in col]
-                filtered_data = {col: row[col] for col in columns_to_include}
-                
-                # Create a DataFrame from the filtered data
-                df = pd.DataFrame([filtered_data])
-                
-                samples_with_metadata.append({
-                    'dataframe': df,
-                    'timestamp': row['timestamp'],
-                    'label': row['label']
-                })
-
-        return samples_with_metadata
-    
-    def replace_with_scaled_columns(self, list_of_dataframes, scaler_type):
-        "options: 'robust', 'standard', 'minmax'"
-        for df in list_of_dataframes:
-            # Identify the scaler columns
-            scaler_cols = [col for col in df.columns if scaler_type in col]
-            
-            # Extract the scaled columns
-            scaled_cols = df[scaler_cols].copy()
-            
-            # Drop the scaler columns from the DataFrame
-            df.drop(columns=scaler_cols, inplace=True)
-            
-            # Replace the unscaled columns with the scaled columns
-            for col in df.columns:
-                for scaler_col in scaler_cols:
-                    if col in scaler_col:
-                        df[col] = scaled_cols[scaler_col]
-                        break
         return list_of_dataframes
 
+    def get_all_collection_names(self):
+        engine = self.db_manager.get_database_engine()
+        with engine.connect() as connection:
+            query = text("SELECT collection_name FROM collections")
+            result = connection.execute(query)
+            collection_names = [row[0] for row in result]
+            print("Collection names retrieved:", collection_names)  # Debugging statement
+        return collection_names
+
+    def check_for_duplicate_collections(self):
+        engine = self.db_manager.get_database_engine()
+        with engine.connect() as connection:
+            query = text("""
+                SELECT collection_name, COUNT(*) 
+                FROM collections 
+                GROUP BY collection_name 
+                HAVING COUNT(*) > 1
+            """)
+            result = connection.execute(query)
+            duplicates = [row[0] for row in result]
+            if duplicates:
+                print("Duplicate collections found:", duplicates)
+            else:
+                print("No duplicate collections found.")
+            return duplicates
+        
     @session_management
-    def get_dataframes_as_dicts(self, session, scaler_type=None):
+    def remove_duplicate_collections(self, session):
+        try:
+            # Step 1: Find duplicate collection names
+            duplicates_query = (
+                session.query(Collection.collection_name)
+                .group_by(Collection.collection_name)
+                .having(func.count(Collection.id) > 1)
+            )
+            duplicate_names = [name for name, in duplicates_query]
+            print(f"Duplicate collections: {duplicate_names}")
+
+            if duplicate_names:
+                for collection_name in duplicate_names:
+                    # Step 2: Find all collections with the duplicate name
+                    collections = session.query(Collection).filter_by(collection_name=collection_name).all()
+
+                    if len(collections) > 1:
+                        # Keep the first collection and delete the rest
+                        primary_collection = collections[0]
+                        duplicate_collections = collections[1:]
+
+                        for collection in duplicate_collections:
+                            # Step 3: Collect metadata IDs for batch deletion
+                            metadata_ids = [
+                                metadata.id for metadata in collection.data_frames_metadata
+                            ]
+
+                            if metadata_ids:
+                                # Delete related DataFrameEntries in batches
+                                session.query(DataFrameEntry).filter(
+                                    DataFrameEntry.data_frame_metadata_id.in_(metadata_ids)
+                                ).delete(synchronize_session='fetch')
+
+                                # Delete DataFrameMetadata in batches
+                                session.query(DataFrameMetadata).filter(
+                                    DataFrameMetadata.id.in_(metadata_ids)
+                                ).delete(synchronize_session='fetch')
+
+                            # Delete the duplicate collection
+                            session.delete(collection)
+
+                session.commit()  # Commit the transaction
+                print("Duplicate collections removed.")
+            else:
+                print("No duplicate collections found.")
+
+        except SQLAlchemyError as e:
+            session.rollback()  # Rollback the transaction in case of error
+            print(f"An error occurred: {e}")
+
+    @session_management
+    def get_dataframes_as_dicts(self, session, scaler_type=None, collection_name=None):
         """
-        Retrieve all dataframes and convert them into dictionaries containing 'label', 'timestamp', and 'data'.
+        Retrieve dataframes for a specific collection and convert them into dictionaries containing 'label', 'timestamp', and 'data'.
 
         Args:
             scaler_type (str, optional): The type of scaled data to replace in the dataframes.
+            collection_name (str, optional): The name of the collection to filter.
 
         Returns:
             list: A list of dictionaries with 'label', 'timestamp', and 'data' (pandas DataFrame).
         """
-        collections = session.query(Collection).all()
+        if collection_name:
+            collections = session.query(Collection).filter(Collection.collection_name == collection_name).all()
+        else:
+            collections = session.query(Collection).all()
+
         result = []
 
         for collection in collections:
-            for metadata in collection.data_frame_metadata:
+            for metadata in collection.data_frames_metadata:
                 entries = metadata.data_frame_entries
 
                 data = pd.DataFrame([{
@@ -320,18 +352,3 @@ class DataService:
                 })
 
         return result
-    
-    def get_all_collection_names(self):
-        """
-        Retrieve all collection names from the database.
-
-        Returns:
-            list: A list of all collection names.
-        """
-        engine = self.db_manager.get_database_engine()
-        collection_names = []
-        with engine.connect() as connection:
-            query = text("SELECT collection_name FROM collections")
-            result = connection.execute(query)
-            collection_names = [row['collection_name'] for row in result]
-        return collection_names

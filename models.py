@@ -77,7 +77,7 @@ class DataFrameEntry(Base):
     volume_btc_robust = Column(Float)
     amount_btc_robust = Column(Float)
     open_eth_robust = Column(Float)
-    close_eth_robust = Column(Float)
+    close_eth_robust = Column(Float)    
     high_eth_robust = Column(Float)
     low_eth_robust = Column(Float)
     volume_eth_robust = Column(Float)
