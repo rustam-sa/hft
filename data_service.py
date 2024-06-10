@@ -111,10 +111,15 @@ class DataService:
         """
 
         try:
-            # Create a new collection
-            new_collection = Collection(collection_name=collection_name)
-            session.add(new_collection)
-            session.commit()
+            # Check if the collection already exists
+            existing_collection = session.query(Collection).filter_by(collection_name=collection_name).first()
+            if existing_collection:
+                new_collection = existing_collection
+            else:
+                # Create a new collection
+                new_collection = Collection(collection_name=collection_name)
+                session.add(new_collection)
+                session.commit()
 
             for sample in samples_with_metadata:
                 timestamp = sample['timestamp']
@@ -127,13 +132,50 @@ class DataService:
                     'close (ETH)': 'close_eth',
                     'high (ETH)': 'high_eth',
                     'low (ETH)': 'low_eth',
+                    'amount (ETH)': 'amount_eth',
                     'volume (ETH)': 'volume_eth',
                     'open (BTC)': 'open_btc',
                     'close (BTC)': 'close_btc',
                     'high (BTC)': 'high_btc',
                     'low (BTC)': 'low_btc',
+                    'amount (BTC)': 'amount_btc',
                     'volume (BTC)': 'volume_btc',
-                    # Add similar mappings for robust, standard, and minmax columns if they exist in your data
+                    'open (ETH)_RobustScaler': 'open_eth_robust',
+                    'close (ETH)_RobustScaler': 'close_eth_robust',
+                    'high (ETH)_RobustScaler': 'high_eth_robust',
+                    'low (ETH)_RobustScaler': 'low_eth_robust',
+                    'amount (ETH)_RobustScaler': 'amount_eth_robust',
+                    'volume (ETH)_RobustScaler': 'volume_eth_robust',
+                    'open (BTC)_RobustScaler': 'open_btc_robust',
+                    'close (BTC)_RobustScaler': 'close_btc_robust',
+                    'high (BTC)_RobustScaler': 'high_btc_robust',
+                    'low (BTC)_RobustScaler': 'low_btc_robust',
+                    'amount (BTC)_RobustScaler': 'amount_btc_robust',
+                    'volume (BTC)_RobustScaler': 'volume_btc_robust',
+                    'open (ETH)_StandardScaler': 'open_eth_standard',
+                    'close (ETH)_StandardScaler': 'close_eth_standard',
+                    'high (ETH)_StandardScaler': 'high_eth_standard',
+                    'low (ETH)_StandardScaler': 'low_eth_standard',
+                    'amount (ETH)_StandardScaler': 'amount_eth_standard',
+                    'volume (ETH)_StandardScaler': 'volume_eth_standard',
+                    'open (BTC)_StandardScaler': 'open_btc_standard',
+                    'close (BTC)_StandardScaler': 'close_btc_standard',
+                    'high (BTC)_StandardScaler': 'high_btc_standard',
+                    'low (BTC)_StandardScaler': 'low_btc_standard',
+                    'amount (BTC)_StandardScaler': 'amount_btc_standard',
+                    'volume (BTC)_StandardScaler': 'volume_btc_standard',
+                    'open (ETH)_MinMaxScaler': 'open_eth_minmax',
+                    'close (ETH)_MinMaxScaler': 'close_eth_minmax',
+                    'high (ETH)_MinMaxScaler': 'high_eth_minmax',
+                    'low (ETH)_MinMaxScaler': 'low_eth_minmax',
+                    'amount (ETH)_MinMaxScaler': 'amount_eth_minmax',
+                    'volume (ETH)_MinMaxScaler': 'volume_eth_minmax',
+                    'open (BTC)_MinMaxScaler': 'open_btc_minmax',
+                    'close (BTC)_MinMaxScaler': 'close_btc_minmax',
+                    'high (BTC)_MinMaxScaler': 'high_btc_minmax',
+                    'low (BTC)_MinMaxScaler': 'low_btc_minmax',
+                    'amount (BTC)_MinMaxScaler': 'amount_btc_minmax',
+                    'volume (BTC)_MinMaxScaler': 'volume_btc_minmax'
                 })
 
                 # Create a new DataFrameMetadata
@@ -142,7 +184,6 @@ class DataService:
                 session.commit()
 
                 # Add each row of the dataframe as a DataFrameEntry
-                entries = []
                 for index, row in dataframe.iterrows():
                     new_entry = DataFrameEntry(
                         data_frame_metadata=new_metadata,
@@ -195,12 +236,11 @@ class DataService:
                         volume_eth_minmax=row.get('volume_eth_minmax'),
                         amount_eth_minmax=row.get('amount_eth_minmax')
                     )
-                    entries.append(new_entry)
+                    session.add(new_entry)
 
-                session.bulk_save_objects(entries)
                 session.commit()
-                logging.info(f"Metadata with timestamp {timestamp} and label {label} added to collection '{collection_name}'")
-            logging.info(f"Collection '{collection_name}' saved successfully with {len(samples_with_metadata)} samples.")
+            # logging.info(f"Metadata with timestamp {timestamp} and label {label} added to collection '{collection_name}'")
+            # logging.info(f"Collection '{collection_name}' saved successfully with {len(samples_with_metadata)} samples.")
 
         except SQLAlchemyError as e:
             logging.error(f"Error saving samples to collection: {e}")
@@ -300,6 +340,41 @@ class DataService:
             print(f"An error occurred: {e}")
 
     @session_management
+    def delete_all_collections(self, session):
+        try:
+            # Fetch all collections
+            all_collections = session.query(Collection).all()
+
+            for collection in all_collections:
+                # Collect metadata IDs for batch deletion
+                metadata_ids = [metadata.id for metadata in collection.data_frames_metadata]
+
+                if metadata_ids:
+                    # Delete related DataFrameEntries in batches
+                    session.query(DataFrameEntry).filter(
+                        DataFrameEntry.data_frame_metadata_id.in_(metadata_ids)
+                    ).delete(synchronize_session='fetch')
+
+                    # Delete DataFrameMetadata in batches
+                    session.query(DataFrameMetadata).filter(
+                        DataFrameMetadata.id.in_(metadata_ids)
+                    ).delete(synchronize_session='fetch')
+
+                # Delete the collection itself
+                session.delete(collection)
+
+            session.commit()  # Commit the transaction
+            print("All collections removed successfully.")
+
+        except SQLAlchemyError as e:
+            session.rollback()  # Rollback the transaction in case of error
+            print(f"An error occurred: {e}")
+            raise
+
+        finally:
+            session.close()
+
+    @session_management
     def merge_duplicate_market_data(self, session):
         try:
             # Step 1: Find duplicate MarketData entries based on unique fields (example: symbol, timeframe, and timestamp)
@@ -361,7 +436,6 @@ class DataService:
             collections = session.query(Collection).all()
 
         result = []
-        print(collections)
         for collection in collections:
             for metadata in collection.data_frames_metadata:
                 entries = metadata.data_frame_entries
