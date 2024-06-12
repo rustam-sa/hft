@@ -3,12 +3,34 @@ import pandas as pd
 from datetime import datetime
 from sqlalchemy import text, inspect, func
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import joinedload
 from models import Base, MarketData, Collection, DataFrameMetadata, DataFrameEntry
 from db_manager import DatabaseManager, session_management
 from data_getter import DataGetter
 
 
+def check_timestamps(timestamps):
+    if not isinstance(timestamps, pd.Series):
+        timestamps = pd.Series(timestamps)
+    timestamps = pd.to_datetime(timestamps)
+    
+    ascending = timestamps.is_monotonic_increasing
+    time_diffs = timestamps.diff().dt.total_seconds()
+    gaps = time_diffs[1:] > 180
+    has_gaps = gaps.any()
+    
+    checks = {
+        'ascending': ascending,
+        'has_gaps': has_gaps,
+        'gaps_indices': gaps[gaps].index.tolist()
+    }
+    if not checks['ascending'] or checks['has_gaps']:
+        print(checks)
+        raise ValueError("Timestamps are not in ascending order or there are gaps larger than 3 minutes.")
+    return checks
+
 logging.basicConfig(level=logging.INFO)
+
 
 class DataService:
     def __init__(self, symbol="ETH-USDT", timeframe="3min"):
@@ -187,6 +209,7 @@ class DataService:
                 for index, row in dataframe.iterrows():
                     new_entry = DataFrameEntry(
                         data_frame_metadata=new_metadata,
+                        timestamp = row.get('timestamp'),
                         open_btc=row.get('open_btc'),
                         close_btc=row.get('close_btc'),
                         high_btc=row.get('high_btc'),
@@ -250,17 +273,6 @@ class DataService:
         finally:
             session.close()
 
-
-    def replace_with_scaled_columns(self, list_of_dataframes, scaled_dfs, prefix):
-        if len(list_of_dataframes) != len(scaled_dfs):
-            raise ValueError("Both lists must have the same length")
-
-        for df, scaled_df in zip(list_of_dataframes, scaled_dfs):
-            for column in scaled_df.columns:
-                new_column = f'{prefix}_{column}'
-                df[new_column] = scaled_df[column]
-
-        return list_of_dataframes
 
     def get_all_collection_names(self):
         engine = self.db_manager.get_database_engine()
@@ -418,8 +430,10 @@ class DataService:
             session.rollback()  # Rollback the transaction in case of error
             print(f"An error occurred: {e}")
 
+    from sqlalchemy.orm import joinedload
+
     @session_management
-    def get_dataframes_as_dicts(self, session, scaler_type=None, collection_name=None):
+    def get_dataframes_as_dicts(self, session, collection_name=None):
         """
         Retrieve dataframes for a specific collection and convert them into dictionaries containing 'label', 'timestamp', and 'data'.
 
@@ -430,17 +444,22 @@ class DataService:
         Returns:
             list: A list of dictionaries with 'label', 'timestamp', and 'data' (pandas DataFrame).
         """
+        query = session.query(Collection)
+        
         if collection_name:
-            collections = session.query(Collection).filter(Collection.collection_name == collection_name).all()
-        else:
-            collections = session.query(Collection).all()
+            query = query.filter(Collection.collection_name == collection_name)
 
+        collections = query.all()
         result = []
+
         for collection in collections:
             for metadata in collection.data_frames_metadata:
-                entries = metadata.data_frame_entries
+                entries_query = session.query(DataFrameEntry).filter(DataFrameEntry.data_frame_metadata_id == metadata.id)
+                entries = entries_query.all()
 
                 data = pd.DataFrame([{
+                    'timestamp': entry.timestamp,
+
                     'open_btc': entry.open_btc,
                     'close_btc': entry.close_btc,
                     'high_btc': entry.high_btc,
@@ -491,13 +510,100 @@ class DataService:
                     'amount_eth_minmax': entry.amount_eth_minmax
                 } for entry in entries])
 
-                if scaler_type:
-                    data = self.replace_with_scaled_columns([data], scaler_type)[0]
-
                 result.append({
                     'label': metadata.label,
                     'timestamp': metadata.timestamp,
                     'data': data
                 })
+        result.sort(key=lambda x: x['timestamp'])
+        print("dataframe_get_gap")
+        timestamps = [sample['timestamp'] for sample in result]
+        check_timestamps(timestamps)
 
         return result
+    # def get_dataframes_as_dicts(self, session, scaler_type=None, collection_name=None):
+    #     """
+    #     Retrieve dataframes for a specific collection and convert them into dictionaries containing 'label', 'timestamp', and 'data'.
+
+    #     Args:
+    #         scaler_type (str, optional): The type of scaled data to replace in the dataframes.
+    #         collection_name (str, optional): The name of the collection to filter.
+
+    #     Returns:
+    #         list: A list of dictionaries with 'label', 'timestamp', and 'data' (pandas DataFrame).
+    #     """
+    #     query = session.query(Collection)
+        
+    #     if collection_name:
+    #         query = query.filter(Collection.collection_name == collection_name)
+            
+    #     query = query.options(joinedload(Collection.data_frames_metadata).joinedload(DataFrameMetadata.data_frame_entries))
+
+    #     collections = query.all()
+
+    #     result = []
+    #     for collection in collections:
+    #         for metadata in collection.data_frames_metadata:
+    #             entries = metadata.data_frame_entries
+
+    #             data = pd.DataFrame([{
+    #                 'open_btc': entry.open_btc,
+    #                 'close_btc': entry.close_btc,
+    #                 'high_btc': entry.high_btc,
+    #                 'low_btc': entry.low_btc,
+    #                 'volume_btc': entry.volume_btc,
+    #                 'amount_btc': entry.amount_btc,
+    #                 'open_eth': entry.open_eth,
+    #                 'close_eth': entry.close_eth,
+    #                 'high_eth': entry.high_eth,
+    #                 'low_eth': entry.low_eth,
+    #                 'volume_eth': entry.volume_eth,
+    #                 'amount_eth': entry.amount_eth,
+    #                 'open_btc_robust': entry.open_btc_robust,
+    #                 'close_btc_robust': entry.close_btc_robust,
+    #                 'high_btc_robust': entry.high_btc_robust,
+    #                 'low_btc_robust': entry.low_btc_robust,
+    #                 'volume_btc_robust': entry.volume_btc_robust,
+    #                 'amount_btc_robust': entry.amount_btc_robust,
+    #                 'open_eth_robust': entry.open_eth_robust,
+    #                 'close_eth_robust': entry.close_eth_robust,
+    #                 'high_eth_robust': entry.high_eth_robust,
+    #                 'low_eth_robust': entry.low_eth_robust,
+    #                 'volume_eth_robust': entry.volume_eth_robust,
+    #                 'amount_eth_robust': entry.amount_eth_robust,
+    #                 'open_btc_standard': entry.open_btc_standard,
+    #                 'close_btc_standard': entry.close_btc_standard,
+    #                 'high_btc_standard': entry.high_btc_standard,
+    #                 'low_btc_standard': entry.low_btc_standard,
+    #                 'volume_btc_standard': entry.volume_btc_standard,
+    #                 'amount_btc_standard': entry.amount_btc_standard,
+    #                 'open_eth_standard': entry.open_eth_standard,
+    #                 'close_eth_standard': entry.close_eth_standard,
+    #                 'high_eth_standard': entry.high_eth_standard,
+    #                 'low_eth_standard': entry.low_eth_standard,
+    #                 'volume_eth_standard': entry.volume_eth_standard,
+    #                 'amount_eth_standard': entry.amount_eth_standard,
+    #                 'open_btc_minmax': entry.open_btc_minmax,
+    #                 'close_btc_minmax': entry.close_btc_minmax,
+    #                 'high_btc_minmax': entry.high_btc_minmax,
+    #                 'low_btc_minmax': entry.low_btc_minmax,
+    #                 'volume_btc_minmax': entry.volume_btc_minmax,
+    #                 'amount_btc_minmax': entry.amount_btc_minmax,
+    #                 'open_eth_minmax': entry.open_eth_minmax,
+    #                 'close_eth_minmax': entry.close_eth_minmax,
+    #                 'high_eth_minmax': entry.high_eth_minmax,
+    #                 'low_eth_minmax': entry.low_eth_minmax,
+    #                 'volume_eth_minmax': entry.volume_eth_minmax,
+    #                 'amount_eth_minmax': entry.amount_eth_minmax
+    #             } for entry in entries])
+
+    #             if scaler_type:
+    #                 data = self.replace_with_scaled_columns([data], scaler_type)[0]
+
+    #             result.append({
+    #                 'label': metadata.label,
+    #                 'timestamp': metadata.timestamp,
+    #                 'data': data
+    #             })
+
+    #     return result
